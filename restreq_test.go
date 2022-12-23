@@ -15,7 +15,8 @@ func Test_req_JSON(t *testing.T) {
 		json    map[string]any
 	}
 	type args struct {
-		i string
+		k string
+		v any
 	}
 	tests := []struct {
 		name   string
@@ -25,62 +26,32 @@ func Test_req_JSON(t *testing.T) {
 	}{
 		{
 			name: "string test 1",
-			args: args{i: "nick=test"},
+			args: args{k: "nick", v: any("test")},
 			want: map[string]any{"nick": "test"},
 		},
 		{
 			name: "string test 2",
-			args: args{i: "nick=test=test"},
-			want: map[string]any{"nick": "test=test"},
-		},
-		{
-			name: "string test 3",
-			args: args{i: "nick="},
-			want: map[string]any{},
-		},
-		{
-			name: "string test 4",
-			args: args{i: "nick"},
-			want: map[string]any{},
-		},
-		{
-			name: "string test 5",
-			args: args{i: "=nick=test"},
+			args: args{k: "nick", v: any("")},
 			want: map[string]any{},
 		},
 		{
 			name: "bool test 1",
-			args: args{i: "bool:=true"},
+			args: args{k: "bool", v: true},
 			want: map[string]any{"bool": true},
 		},
 		{
 			name: "bool test 2",
-			args: args{i: "bool:=false"},
+			args: args{k: "bool", v: false},
 			want: map[string]any{"bool": false},
 		},
 		{
-			name: "bool test 3",
-			args: args{i: "bool:=xxx"},
-			want: map[string]any{},
-		},
-		{
-			name: "bool test 4",
-			args: args{i: "bool:="},
-			want: map[string]any{},
-		},
-		{
-			name: "bool test 5",
-			args: args{i: ":=true"},
-			want: map[string]any{},
-		},
-		{
 			name: "float64 test 1",
-			args: args{i: "float64:=2.34"},
+			args: args{k: "float64", v: 2.34},
 			want: map[string]any{"float64": 2.34},
 		},
 		{
 			name: "int32 test 1",
-			args: args{i: "int32:=76"},
+			args: args{k: "int32", v: int64(76)},
 			want: map[string]any{"int32": int64(76)},
 		},
 	}
@@ -93,7 +64,7 @@ func Test_req_JSON(t *testing.T) {
 				json:    tt.fields.json,
 			}
 			r.json = make(map[string]any)
-			r.SetJSONKeyValue(tt.args.i)
+			r.AddJSONKeyValue(tt.args.k, tt.args.v)
 
 			if !reflect.DeepEqual(r.json, tt.want) {
 				t.Errorf("req.JSON() = %v, want %v", r.json, tt.want)

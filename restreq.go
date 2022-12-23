@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -16,24 +14,20 @@ type result struct {
 
 type requester interface {
 	Context(context.Context) requester
+	AddHeader(string, string) requester
+	AddCookie(*http.Cookie) requester
+	AddJSONKeyValue(string, any) requester
 	SetTimeoutSec(int) requester
-	SetHeader(string, string) requester
 	SetUserAgent(string) requester
 	SetContentType(string) requester
 	SetContentTypeJSON() requester
-	SetJSONKeyValue(string) requester
 	SetJSONPayload(any) requester
+	SetBasicAuth(username, password string) requester
 	Post() (*result, error)
 	Put() (*result, error)
 	Patch() (*result, error)
 	Get() (*result, error)
 	Delete() (*result, error)
-	AddCookie(*http.Cookie) requester
-	SetBasicAuth(username, password string) requester
-}
-
-func (result) JSON(string) (any, bool) {
-	return nil, false
 }
 
 func (r *result) Header(s string) string {
@@ -108,40 +102,17 @@ func (r *req) SetTimeoutSec(t int) requester {
 	return r
 }
 
-func (r *req) SetHeader(k string, v string) requester {
+func (r *req) AddHeader(k string, v string) requester {
 	r.headers[k] = v
 	return r
 }
 
-func (r *req) SetJSONKeyValue(i string) requester {
-	key, value, ok := strings.Cut(i, ":=")
-	if ok && (key == "" || value == "") {
-		return r
-	}
-	if ok {
-		vb, err := strconv.ParseBool(value)
-		if err == nil {
-			r.json[key] = vb
-			return r
-		}
-
-		vi, err := strconv.ParseInt(value, 10, 64)
-		if err == nil {
-			r.json[key] = vi
-			return r
-		}
-
-		vf, err := strconv.ParseFloat(value, 64)
-		if err == nil {
-			r.json[key] = vf
-		}
+func (r *req) AddJSONKeyValue(key string, value any) requester {
+	if key == "" || value == "" {
 		return r
 	}
 
-	key, value, ok = strings.Cut(i, "=")
-	if ok && key != "" && value != "" {
-		r.json[key] = value
-	}
+	r.json[key] = value
 	return r
 }
 
