@@ -93,7 +93,7 @@ func Test_req_JSON(t *testing.T) {
 				json:    tt.fields.json,
 			}
 			r.json = make(map[string]any)
-			r.JSON(tt.args.i)
+			r.SetJSONKeyValue(tt.args.i)
 
 			if !reflect.DeepEqual(r.json, tt.want) {
 				t.Errorf("req.JSON() = %v, want %v", r.json, tt.want)
