@@ -34,7 +34,7 @@ func (r *result) Header(s string) string {
 	return r.Response.Header.Get(s)
 }
 
-func (r *result) GetDecodedJSON(s any) error {
+func (r *result) DecodeJSON(s any) error {
 	return json.NewDecoder(r.Body).Decode(&s)
 }
 
