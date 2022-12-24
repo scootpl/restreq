@@ -1,3 +1,37 @@
+/*
+Restreq is a wrapper for net/http client.
+You can easily create requests.
+
+Examples:
+
+1)
+
+	resp, err := restreq.New("http://").Post()
+	defer resp.Body.Close()
+
+2)
+
+	resp, err := restreq.New("http://").
+		Context(ctx).
+		SetTimeoutSec(30).
+		AddHeader(token, authToken).
+		Post()
+	defer resp.Body.Close()
+
+3)
+
+	p := map[string]any{
+		"key": "value",
+	}
+
+	resp, err := restreq.New("http://").
+		Context(ctx).
+		SetTimeoutSec(30).
+		SetContentTypeJSON().
+		SetJSONPayload(p).
+		Post()
+	defer resp.Body.Close()
+*/
 package restreq
 
 import (
@@ -8,8 +42,21 @@ import (
 	"time"
 )
 
-type result struct {
+// Response inherits from *http.Response
+// and adds some new methods
+type Response struct {
 	*http.Response
+}
+
+// Header returns s header
+func (r *Response) Header(s string) string {
+	return r.Response.Header.Get(s)
+}
+
+// DecodeJSON decodes JSON from the response body
+// to the s struct
+func (r *Response) DecodeJSON(s any) error {
+	return json.NewDecoder(r.Body).Decode(&s)
 }
 
 type requester interface {
@@ -23,22 +70,15 @@ type requester interface {
 	SetContentTypeJSON() requester
 	SetJSONPayload(any) requester
 	SetBasicAuth(username, password string) requester
-	Post() (*result, error)
-	Put() (*result, error)
-	Patch() (*result, error)
-	Get() (*result, error)
-	Delete() (*result, error)
+	Post() (*Response, error)
+	Put() (*Response, error)
+	Patch() (*Response, error)
+	Get() (*Response, error)
+	Delete() (*Response, error)
 }
 
-func (r *result) Header(s string) string {
-	return r.Response.Header.Get(s)
-}
-
-func (r *result) DecodeJSON(s any) error {
-	return json.NewDecoder(r.Body).Decode(&s)
-}
-
-type req struct {
+// Request contains all the methods to operate on REST API
+type Request struct {
 	ctx         context.Context
 	timeout     time.Duration
 	url         string
@@ -50,8 +90,8 @@ type req struct {
 	jsonPayload []byte
 }
 
-func New(u string) *req {
-	return &req{
+func New(u string) *Request {
+	return &Request{
 		url:     u,
 		json:    make(map[string]any),
 		headers: make(map[string]string),
@@ -59,55 +99,65 @@ func New(u string) *req {
 	}
 }
 
-func (r *req) SetJSONPayload(p any) requester {
+// SetJSONPayload encodes p struct to []byte
+func (r *Request) SetJSONPayload(p any) requester {
 	w := bytes.NewBuffer([]byte{})
 	json.NewEncoder(w).Encode(p)
 	r.jsonPayload = w.Bytes()
 	return r
 }
 
-func (r *req) SetBasicAuth(username, password string) requester {
+// SetBasicAuth sets basic auth with username and password
+func (r *Request) SetBasicAuth(username, password string) requester {
 	r.username = username
 	r.password = password
 	return r
 }
 
-func (r *req) AddCookie(c *http.Cookie) requester {
+// AddCookie adds cookie to request
+func (r *Request) AddCookie(c *http.Cookie) requester {
 	r.cookies[c.Name] = c
 	return r
 }
 
-func (r *req) SetContentType(s string) requester {
+// SetContentType sets Content-Type
+func (r *Request) SetContentType(s string) requester {
 	r.headers["Content-Type"] = s
 	return r
 }
 
-func (r *req) SetContentTypeJSON() requester {
+// SetContentTypeJSON sets Content-Type to application/json
+func (r *Request) SetContentTypeJSON() requester {
 	r.headers["Content-Type"] = "application/json"
 	return r
 }
 
-func (r *req) SetUserAgent(s string) requester {
+// SetUserAgent sets User-Agent to s
+func (r *Request) SetUserAgent(s string) requester {
 	r.headers["User-Agent"] = s
 	return r
 }
 
-func (r *req) Context(ctx context.Context) requester {
+// Context sets context to ctx
+func (r *Request) Context(ctx context.Context) requester {
 	r.ctx = ctx
 	return r
 }
 
-func (r *req) SetTimeoutSec(t int) requester {
+// SetTimeoutSec sets connection timeout to t seconds
+func (r *Request) SetTimeoutSec(t int) requester {
 	r.timeout = time.Second * time.Duration(t)
 	return r
 }
 
-func (r *req) AddHeader(k string, v string) requester {
+// AddHeader adds k header with v value
+func (r *Request) AddHeader(k string, v string) requester {
 	r.headers[k] = v
 	return r
 }
 
-func (r *req) AddJSONKeyValue(key string, value any) requester {
+// AddJSONKeyValue converts key/value to json
+func (r *Request) AddJSONKeyValue(key string, value any) requester {
 	if key == "" || value == "" {
 		return r
 	}
@@ -116,46 +166,51 @@ func (r *req) AddJSONKeyValue(key string, value any) requester {
 	return r
 }
 
-func (r *req) Post() (*result, error) {
+// Post executes the post method
+func (r *Request) Post() (*Response, error) {
 	c := http.Client{
 		Timeout: r.timeout,
 	}
 	return r.do("POST", &c)
 }
 
-func (r *req) Get() (*result, error) {
+// Get executes the get method
+func (r *Request) Get() (*Response, error) {
 	c := http.Client{
 		Timeout: r.timeout,
 	}
 	return r.do("GET", &c)
 }
 
-func (r *req) Delete() (*result, error) {
+// Delete executes the delete method
+func (r *Request) Delete() (*Response, error) {
 	c := http.Client{
 		Timeout: r.timeout,
 	}
 	return r.do("DELETE", &c)
 }
 
-func (r *req) Patch() (*result, error) {
+// Patch executes the patch method
+func (r *Request) Patch() (*Response, error) {
 	c := http.Client{
 		Timeout: r.timeout,
 	}
 	return r.do("PATCH", &c)
 }
 
-func (r *req) Put() (*result, error) {
+// Put executes the put method
+func (r *Request) Put() (*Response, error) {
 	c := http.Client{
 		Timeout: r.timeout,
 	}
 	return r.do("PUT", &c)
 }
 
-type HTTPClient interface {
+type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-func (r *req) do(method string, c HTTPClient) (*result, error) {
+func (r *Request) do(method string, c httpClient) (*Response, error) {
 	payload := bytes.NewBuffer([]byte{})
 
 	if len(r.jsonPayload) > 0 {
@@ -192,7 +247,7 @@ func (r *req) do(method string, c HTTPClient) (*result, error) {
 		return nil, err
 	}
 
-	return &result{
+	return &Response{
 		Response: resp,
 	}, nil
 }
