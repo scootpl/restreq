@@ -2,21 +2,19 @@
 Restreq is a wrapper for net/http client.
 You can easily create requests.
 
+Body content is copied to Response.Body, so you don't have to call resp.Body.Close()
+
 Examples:
 
 1)
 
 	resp, err := restreq.New("http://").Post()
-	defer resp.Body.Close()
 
 2)
 
 	resp, err := restreq.New("http://").
-		Context(ctx).
-		SetTimeoutSec(30).
 		AddHeader(token, authToken).
 		Post()
-	defer resp.Body.Close()
 
 3)
 
@@ -30,7 +28,6 @@ Examples:
 		SetContentTypeJSON().
 		SetJSONPayload(p).
 		Post()
-	defer resp.Body.Close()
 */
 package restreq
 
@@ -38,14 +35,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 )
+
+type httpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 
 // Response inherits from *http.Response
 // and adds some new methods
 type Response struct {
 	*http.Response
+	Body []byte
 }
 
 // Header returns s header
@@ -56,11 +62,13 @@ func (r *Response) Header(s string) string {
 // DecodeJSON decodes JSON from the response body
 // to the s struct
 func (r *Response) DecodeJSON(s any) error {
-	return json.NewDecoder(r.Body).Decode(&s)
+	b := bytes.NewReader(r.Body)
+	return json.NewDecoder(b).Decode(&s)
 }
 
 type requester interface {
 	Context(context.Context) requester
+	SetHTTPClient(httpClient) requester
 	AddHeader(string, string) requester
 	AddCookie(*http.Cookie) requester
 	AddJSONKeyValue(string, any) requester
@@ -70,6 +78,7 @@ type requester interface {
 	SetContentTypeJSON() requester
 	SetJSONPayload(any) requester
 	SetBasicAuth(username, password string) requester
+	Debug(*log.Logger, DebugFlag) requester
 	Post() (*Response, error)
 	Put() (*Response, error)
 	Patch() (*Response, error)
@@ -88,6 +97,9 @@ type Request struct {
 	username    string
 	password    string
 	jsonPayload []byte
+	client      httpClient
+	debugFlags  int32
+	logger      *log.Logger
 }
 
 func New(u string) *Request {
@@ -99,7 +111,31 @@ func New(u string) *Request {
 	}
 }
 
-// SetJSONPayload encodes p struct to []byte
+type DebugFlag int32
+
+const (
+	ReqBody DebugFlag = 1 << iota
+	ReqHeaders
+	ReqCookies
+	RespBody
+	RespHeaders
+	RespCookies
+)
+
+// SetHTTPClient sets http client
+func (r *Request) SetHTTPClient(c httpClient) requester {
+	r.client = c
+	return r
+}
+
+// Debug sets logger and debug flags
+func (r *Request) Debug(logger *log.Logger, flags DebugFlag) requester {
+	r.debugFlags = int32(flags)
+	r.logger = logger
+	return r
+}
+
+// SetJSONPayload encodes json
 func (r *Request) SetJSONPayload(p any) requester {
 	w := bytes.NewBuffer([]byte{})
 	json.NewEncoder(w).Encode(p)
@@ -168,49 +204,48 @@ func (r *Request) AddJSONKeyValue(key string, value any) requester {
 
 // Post executes the post method
 func (r *Request) Post() (*Response, error) {
-	c := http.Client{
-		Timeout: r.timeout,
-	}
-	return r.do("POST", &c)
+	return r.do("POST")
 }
 
 // Get executes the get method
 func (r *Request) Get() (*Response, error) {
-	c := http.Client{
-		Timeout: r.timeout,
-	}
-	return r.do("GET", &c)
+	return r.do("GET")
 }
 
 // Delete executes the delete method
 func (r *Request) Delete() (*Response, error) {
-	c := http.Client{
-		Timeout: r.timeout,
-	}
-	return r.do("DELETE", &c)
+	return r.do("DELETE")
 }
 
 // Patch executes the patch method
 func (r *Request) Patch() (*Response, error) {
-	c := http.Client{
-		Timeout: r.timeout,
-	}
-	return r.do("PATCH", &c)
+	return r.do("PATCH")
 }
 
 // Put executes the put method
 func (r *Request) Put() (*Response, error) {
-	c := http.Client{
-		Timeout: r.timeout,
+	return r.do("PUT")
+}
+
+func (r *Request) debug(f DebugFlag, s string) {
+	if r.logger == nil || r.debugFlags&(1<<(f-1)) == 0 {
+		return
 	}
-	return r.do("PUT", &c)
+
+	r.logger.Printf("%s\n", s)
 }
 
-type httpClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
+func (r *Request) do(method string) (*Response, error) {
+	var c httpClient
 
-func (r *Request) do(method string, c httpClient) (*Response, error) {
+	if r.client == nil {
+		c = &http.Client{
+			Timeout: r.timeout,
+		}
+	} else {
+		c = r.client
+	}
+
 	payload := bytes.NewBuffer([]byte{})
 
 	if len(r.jsonPayload) > 0 {
@@ -220,6 +255,8 @@ func (r *Request) do(method string, c httpClient) (*Response, error) {
 			return nil, err
 		}
 	}
+
+	r.debug(ReqBody, fmt.Sprintf("Body: %s", strings.TrimRight(payload.String(), "\n")))
 
 	req, err := http.NewRequest(method, r.url, payload)
 	if err != nil {
@@ -232,14 +269,16 @@ func (r *Request) do(method string, c httpClient) (*Response, error) {
 
 	for k, v := range r.headers {
 		req.Header.Set(k, v)
+		r.debug(ReqHeaders, fmt.Sprintf("Header: %s: %s", k, v))
 	}
 
 	if r.username != "" && r.password != "" {
 		r.SetBasicAuth(r.username, r.password)
 	}
 
-	for _, v := range r.cookies {
+	for k, v := range r.cookies {
 		r.AddCookie(v)
+		r.debug(ReqCookies, fmt.Sprintf("Cookie: %s: %s", k, v))
 	}
 
 	resp, err := c.Do(req)
@@ -247,7 +286,14 @@ func (r *Request) do(method string, c httpClient) (*Response, error) {
 		return nil, err
 	}
 
+	body := bytes.NewBuffer([]byte{})
+	if _, err = io.Copy(body, resp.Body); err != nil {
+		return nil, err
+	}
+	resp.Body.Close()
+
 	return &Response{
 		Response: resp,
+		Body:     body.Bytes(),
 	}, nil
 }
