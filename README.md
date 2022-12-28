@@ -8,13 +8,13 @@ and parse result. This should be sufficient in most use cases.
 - Simplest use
 
 ```go
-	resp, err := restreq.New("http://example.com").Post()
+    resp, err := restreq.New("http://example.com").Post()
 ```
 
 - You can add a header
 
 ```go
-	resp, err := restreq.New("http://example.com").
+    resp, err := restreq.New("http://example.com").
 		AddHeader("X-TOKEN", authToken).
 		Post()
 ```
@@ -22,7 +22,7 @@ and parse result. This should be sufficient in most use cases.
 - Use map with JSON payload
 
  ```go
-	p := map[string]any{
+    p := map[string]any{
 		"string": "string",
 		"bool": true,
 		"float": 2.34,
@@ -68,7 +68,7 @@ and parse result. This should be sufficient in most use cases.
 
 - Add a context to the request
 ```go
-Context(context.Context)
+    Context(context.Context)
 ```
 
 - Set an external httpClient. SetTimeoutSec() doesn't work in this case
@@ -97,17 +97,17 @@ Context(context.Context)
 
 - Set User-Agent header
 ```go
-	SetUserAgent(string)
+    SetUserAgent(string)
 ```
 
  - Set Content-Type header
  ```go
-	SetContentType(string)
+    SetContentType(string)
 ```
  
  - Set Content-Type to application/json
  ```go
-	SetContentTypeJSON()
+    SetContentTypeJSON()
 ```
 
 - Set JSON payload, encodes map or struct to json byte array.
@@ -156,12 +156,12 @@ const (
 
 - Get header value
 ```go
-Header(s string) string 
+    Header(s string) string 
 ```
 
 - Decode JSON reply
 ```go
-DecodeJSON(s any) error
+    DecodeJSON(s any) error
 ```
 
 
