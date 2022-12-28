@@ -1,45 +1,11 @@
-/*
-Restreq is a wrapper for net/http client.
-You can easily create requests.
-
-Body content is copied to Response.Body, so you don't have to call resp.Body.Close()
-
-Examples:
-
-1)
-
-	resp, err := restreq.New("http://").Post()
-
-2)
-
-	resp, err := restreq.New("http://").
-		AddHeader(token, authToken).
-		Post()
-
-3)
-
-	p := map[string]any{
-		"key": "value",
-	}
-
-	resp, err := restreq.New("http://").
-		Context(ctx).
-		SetTimeoutSec(30).
-		SetContentTypeJSON().
-		SetJSONPayload(p).
-		Post()
-*/
 package restreq
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -47,20 +13,23 @@ type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// Response inherits from *http.Response
-// and adds some new methods
+// Response inherits from http.Response, so you can use almost every
+// field and method of http.Response.
+//
+// http.Response.Body is an exception. You cannot use it, because
+// content of http.Response.Body is copied to Response.Body.
+// You don't have to call http.Response.Body.Close()
 type Response struct {
 	*http.Response
 	Body []byte
 }
 
-// Header returns s header
+// Header returns header
 func (r *Response) Header(s string) string {
 	return r.Response.Header.Get(s)
 }
 
-// DecodeJSON decodes JSON from the response body
-// to the s struct
+// DecodeJSON decodes JSON
 func (r *Response) DecodeJSON(s any) error {
 	b := bytes.NewReader(r.Body)
 	return json.NewDecoder(b).Decode(&s)
@@ -86,7 +55,7 @@ type requester interface {
 	Delete() (*Response, error)
 }
 
-// Request contains all the methods to operate on REST API
+// Request contains all methods to operate on REST API
 type Request struct {
 	ctx         context.Context
 	timeout     time.Duration
@@ -113,29 +82,37 @@ func New(u string) *Request {
 
 type DebugFlag int32
 
+// DebugFlags to control logger behavior.
 const (
+	// Debug request body
 	ReqBody DebugFlag = 1 << iota
+	// Debug request headers
 	ReqHeaders
+	// Debug request cookies
 	ReqCookies
+	// Debug response body
 	RespBody
+	// Debug response header
 	RespHeaders
+	// Debug response cookies
 	RespCookies
 )
 
-// SetHTTPClient sets http client
+// SetHTTPClient sets external http client.
 func (r *Request) SetHTTPClient(c httpClient) requester {
 	r.client = c
 	return r
 }
 
-// Debug sets logger and debug flags
+// Debug sets logger and debug flags.
+// You can combine flags, ReqBody+ReqHeader etc.
 func (r *Request) Debug(logger *log.Logger, flags DebugFlag) requester {
 	r.debugFlags = int32(flags)
 	r.logger = logger
 	return r
 }
 
-// SetJSONPayload encodes json
+// SetJSONPayload encodes map or struct to json byte array.
 func (r *Request) SetJSONPayload(p any) requester {
 	w := bytes.NewBuffer([]byte{})
 	json.NewEncoder(w).Encode(p)
@@ -143,32 +120,32 @@ func (r *Request) SetJSONPayload(p any) requester {
 	return r
 }
 
-// SetBasicAuth sets basic auth with username and password
+// SetBasicAuth sets basic auth with username and password.
 func (r *Request) SetBasicAuth(username, password string) requester {
 	r.username = username
 	r.password = password
 	return r
 }
 
-// AddCookie adds cookie to request
+// AddCookie adds cookie to request.
 func (r *Request) AddCookie(c *http.Cookie) requester {
 	r.cookies[c.Name] = c
 	return r
 }
 
-// SetContentType sets Content-Type
+// SetContentType sets Content-Type.
 func (r *Request) SetContentType(s string) requester {
 	r.headers["Content-Type"] = s
 	return r
 }
 
-// SetContentTypeJSON sets Content-Type to application/json
+// SetContentTypeJSON sets Content-Type to application/json.
 func (r *Request) SetContentTypeJSON() requester {
 	r.headers["Content-Type"] = "application/json"
 	return r
 }
 
-// SetUserAgent sets User-Agent to s
+// SetUserAgent sets User-Agent header.
 func (r *Request) SetUserAgent(s string) requester {
 	r.headers["User-Agent"] = s
 	return r
@@ -180,19 +157,21 @@ func (r *Request) Context(ctx context.Context) requester {
 	return r
 }
 
-// SetTimeoutSec sets connection timeout to t seconds
+// SetTimeoutSec sets connection timeout.
 func (r *Request) SetTimeoutSec(t int) requester {
 	r.timeout = time.Second * time.Duration(t)
 	return r
 }
 
-// AddHeader adds k header with v value
+// AddHeader adds header with value.
 func (r *Request) AddHeader(k string, v string) requester {
 	r.headers[k] = v
 	return r
 }
 
-// AddJSONKeyValue converts key/value to json
+// AddJSONKeyValue converts KV to json byte array.
+// You can add many KV, they will be added to the map
+// and converted to an byte array when the request is sent.
 func (r *Request) AddJSONKeyValue(key string, value any) requester {
 	if key == "" || value == "" {
 		return r
@@ -233,67 +212,4 @@ func (r *Request) debug(f DebugFlag, s string) {
 	}
 
 	r.logger.Printf("%s\n", s)
-}
-
-func (r *Request) do(method string) (*Response, error) {
-	var c httpClient
-
-	if r.client == nil {
-		c = &http.Client{
-			Timeout: r.timeout,
-		}
-	} else {
-		c = r.client
-	}
-
-	payload := bytes.NewBuffer([]byte{})
-
-	if len(r.jsonPayload) > 0 {
-		payload.Write(r.jsonPayload)
-	} else {
-		if err := json.NewEncoder(payload).Encode(r.json); err != nil {
-			return nil, err
-		}
-	}
-
-	r.debug(ReqBody, fmt.Sprintf("Body: %s", strings.TrimRight(payload.String(), "\n")))
-
-	req, err := http.NewRequest(method, r.url, payload)
-	if err != nil {
-		return nil, err
-	}
-
-	if r.ctx != nil {
-		req = req.WithContext(r.ctx)
-	}
-
-	for k, v := range r.headers {
-		req.Header.Set(k, v)
-		r.debug(ReqHeaders, fmt.Sprintf("Header: %s: %s", k, v))
-	}
-
-	if r.username != "" && r.password != "" {
-		r.SetBasicAuth(r.username, r.password)
-	}
-
-	for k, v := range r.cookies {
-		r.AddCookie(v)
-		r.debug(ReqCookies, fmt.Sprintf("Cookie: %s: %s", k, v))
-	}
-
-	resp, err := c.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	body := bytes.NewBuffer([]byte{})
-	if _, err = io.Copy(body, resp.Body); err != nil {
-		return nil, err
-	}
-	resp.Body.Close()
-
-	return &Response{
-		Response: resp,
-		Body:     body.Bytes(),
-	}, nil
 }
