@@ -61,10 +61,12 @@ func (r *Request) do(method string) (*Response, error) {
 	}
 
 	body := bytes.NewBuffer([]byte{})
-	if _, err = io.Copy(body, resp.Body); err != nil {
-		return nil, err
+	if !r.bodyReader {
+		if _, err = io.Copy(body, resp.Body); err != nil {
+			return nil, err
+		}
+		resp.Body.Close()
 	}
-	resp.Body.Close()
 
 	return &Response{
 		Response: resp,

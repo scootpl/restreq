@@ -4,17 +4,17 @@ and parse result. This should be sufficient in most use cases.
 
 # Examples
 
-1) Simplest use
+- Simplest use
 
 	resp, err := restreq.New("http://example.com").Post()
 
-2) You can add a header
+- You can add a header
 
 	resp, err := restreq.New("http://example.com").
 		AddHeader("X-TOKEN", authToken).
 		Post()
 
-3) Use map with JSON payload
+- Use map with JSON payload
 
 	p := map[string]any{
 		"string": "string",
@@ -27,7 +27,7 @@ and parse result. This should be sufficient in most use cases.
 		SetJSONPayload(p).
 		Post()
 
-4) JSON payload with KV
+- JSON payload with KV
 
 	resp, err := restreq.New("http://example.com").
 		SetContentTypeJSON().
@@ -39,11 +39,34 @@ and parse result. This should be sufficient in most use cases.
 
 # Parsing response
 
-1) Get header value
+- In the default behavior, the body of the response is copied to Response.Body, and you don't have to
+call http.Response.Body.Close()
+
+	resp, err := restreq.New("http://example.com").Post()
+
+	if err == nil {
+		fmt.Printf("%s\n", resp.Body)
+	}
+
+- Default behavior is convenient but not optimal, due to redundant copying. If you need high performance,
+you can disable this behavior and direct access to the io.Reader. Don't forget to call Response.Body.Close()
+
+	resp, err := restreq.New("http://example.com").
+		WithBodyReader().
+		Post()
+
+	if err == nil {
+		defer resp.Response.Body.Close()
+		b := bytes.NewBuffer([]byte{})
+		b.ReadFrom(resp.Response.Body)
+		fmt.Println(b.String())
+	}
+
+- Get header value
 
 	value := resp.Header("token")
 
-2) Decode JSON
+- Decode JSON
 
 	s := struct {
 		Message string `json:"message,omitempty"`

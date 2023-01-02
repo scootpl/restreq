@@ -48,6 +48,7 @@ type requester interface {
 	SetJSONPayload(any) requester
 	SetBasicAuth(username, password string) requester
 	Debug(*log.Logger, DebugFlag) requester
+	WithBodyReader() requester
 	Post() (*Response, error)
 	Put() (*Response, error)
 	Patch() (*Response, error)
@@ -69,6 +70,7 @@ type Request struct {
 	client      httpClient
 	debugFlags  int32
 	logger      *log.Logger
+	bodyReader  bool
 }
 
 func New(u string) *Request {
@@ -97,6 +99,13 @@ const (
 	// Debug response cookies
 	RespCookies
 )
+
+// WithBodyReader allows direct reading from http.Response.Body without
+// copying to restreq.Response.Body
+func (r *Request) WithBodyReader() requester {
+	r.bodyReader = true
+	return r
+}
 
 // SetHTTPClient sets external http client.
 func (r *Request) SetHTTPClient(c httpClient) requester {
