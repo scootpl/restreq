@@ -2,6 +2,9 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/scootpl/restreq.svg)](https://pkg.go.dev/github.com/scootpl/restreq)
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/scootpl/restreq)](https://goreportcard.com/report/github.com/scootpl/restreq)
+
+
 RestReq is a wrapper around standard Go net/http client. In a simple call you can use json encoding, add headers
 and parse result. This should be sufficient in most use cases.
 
