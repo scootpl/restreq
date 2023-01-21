@@ -31,8 +31,7 @@ func (r *Response) Header(s string) string {
 
 // DecodeJSON decodes JSON
 func (r *Response) DecodeJSON(s any) error {
-	b := bytes.NewReader(r.Body)
-	return json.NewDecoder(b).Decode(&s)
+	return json.Unmarshal(r.Body, &s)
 }
 
 type requester interface {
