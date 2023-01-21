@@ -20,7 +20,7 @@ func (r *Request) do(method string) (*Response, error) {
 		c = r.client
 	}
 
-	payload := bytes.NewBuffer([]byte{})
+	payload := &bytes.Buffer{}
 
 	if len(r.jsonPayload) > 0 {
 		payload.Write(r.jsonPayload)
@@ -60,7 +60,7 @@ func (r *Request) do(method string) (*Response, error) {
 		return nil, err
 	}
 
-	body := bytes.NewBuffer([]byte{})
+	body := &bytes.Buffer{}
 	if !r.bodyReader {
 		if _, err = io.Copy(body, resp.Body); err != nil {
 			return nil, err

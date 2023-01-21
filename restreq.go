@@ -191,27 +191,27 @@ func (r *Request) AddJSONKeyValue(key string, value any) requester {
 
 // Post executes the post method
 func (r *Request) Post() (*Response, error) {
-	return r.do("POST")
+	return r.do(http.MethodPost)
 }
 
 // Get executes the get method
 func (r *Request) Get() (*Response, error) {
-	return r.do("GET")
+	return r.do(http.MethodGet)
 }
 
 // Delete executes the delete method
 func (r *Request) Delete() (*Response, error) {
-	return r.do("DELETE")
+	return r.do(http.MethodDelete)
 }
 
 // Patch executes the patch method
 func (r *Request) Patch() (*Response, error) {
-	return r.do("PATCH")
+	return r.do(http.MethodPatch)
 }
 
 // Put executes the put method
 func (r *Request) Put() (*Response, error) {
-	return r.do("PUT")
+	return r.do(http.MethodPut)
 }
 
 func (r *Request) debug(f DebugFlag, s string) {
